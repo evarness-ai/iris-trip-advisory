@@ -1,0 +1,25 @@
+# The plugin's contract with IRIS (docs/architecture/plugin-contract.md).
+name: trip-advisory
+version: 0.1.0
+summary: Suggest what to pack and which outdoor plans suit a trip's forecast.
+description: >-
+  Trip Advisory: given a place and a date range, asks the weather.forecast capability for
+  the forecast and returns a trivial packing and outdoor-plans suggestion. It imports no
+  other plugin: the forecast arrives only through the declared capability.
+entrypoint: plugin:setup
+flavor: python
+party: trusted-third-party
+trust: in-process
+provides:
+  - tool
+capabilities:
+  # Works without a forecast, degraded: it says it could not check the weather.
+  uses:
+    - weather.forecast
+  requires: []
+tools:
+  trip_advisory:
+    effect: read
+    # The forecast's place name and summary are text a third party wrote and they are
+    # echoed in the result, so it is scanned like any external text.
+    content: external

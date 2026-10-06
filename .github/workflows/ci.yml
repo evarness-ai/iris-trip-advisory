@@ -1,0 +1,56 @@
+name: ci
+
+# Written, not pushed: this repository is local until the owner publishes it.
+# The weather.forecast provider in the tests is an in-test stand-in; the one integration
+# test against the real iris-plugin-weather-now skips when that is not installed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # iris-harness is not on PyPI yet, so the plugin is tested against a wheel built from a
+  # pinned ref of the public repository: the consumer experience, never a source checkout
+  # on PYTHONPATH. Bump the ref deliberately.
+  IRIS_HARNESS_REF: main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the plugin against an installed iris-harness wheel
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip build
+          git clone --depth 1 --branch "$IRIS_HARNESS_REF" https://github.com/evarness-ai/iris-harness.git "$RUNNER_TEMP/iris-harness"
+          .venv/bin/python -m build --wheel "$RUNNER_TEMP/iris-harness" --outdir "$RUNNER_TEMP/wheelhouse"
+          .venv/bin/pip install "$RUNNER_TEMP"/wheelhouse/iris_harness-*.whl
+          .venv/bin/pip install -e ".[test]" ruff black
+      - name: Lint
+        run: |
+          .venv/bin/ruff check .
+          .venv/bin/black --check .
+      - name: Only the stable tier is imported (check_stable_imports)
+        run: |
+          .venv/bin/python - <<'PY'
+          import sys
+          from pathlib import Path
+          from iris_harness.testing import check_stable_imports
+
+          violations = check_stable_imports([Path("src"), Path("tests")])
+          for v in violations:
+              print(v)
+          sys.exit(1 if violations else 0)
+          PY
+      - name: Tests (no network, scripted model)
+        run: .venv/bin/python -m pytest -q
