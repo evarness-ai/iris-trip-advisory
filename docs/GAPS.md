@@ -85,7 +85,11 @@ but it has no `capabilities:` block, and the generated README still says `iris p
 
 Mostly fixed on `main` (iris-harness#110 is still open). Re-checked at `2166717`: the
 `googleapiclient` traceback and the `unknown handler` heartbeat warnings no longer appear, and
-no `libc++abi` abort was seen and the gate's pytest step exited 0 (macOS). A new
+the interpreter-exit `libc++abi: terminating due to uncaught exception ... recursive_mutex lock
+failed` abort is STILL present, intermittently: it hit the final gate run of
+`iris-plugin-weather-now` (23 passed, then the abort, so the gate's pytest step failed) and did
+not hit the other runs of this work, including this repository's (macOS, not tracked by an
+iris-harness issue as far as the issue titles show). A new
 warning appears on every chat turn instead: `intercept '<name>' is declared for plugin:<x> but
 no plugin registered it; skipping`. The text below describes the earlier build.
 
