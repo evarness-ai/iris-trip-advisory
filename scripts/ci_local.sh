@@ -69,6 +69,12 @@ WHEEL="$(ls -t "$WHEEL_SRC"/iris_harness-*.whl 2>/dev/null | head -1)"
 step "install $(basename "$WHEEL") + plugin"
 "$VENV/bin/pip" install -q "$WHEEL" || die "harness wheel install failed"
 "$VENV/bin/pip" install -q -e ".[test]" ruff black || die "plugin install failed"
+# tests/graduation (issue #81) runs both plugins in one environment: install the sibling
+# weather plugin when it is checked out next to this repository (else that suite is not collected).
+WEATHER="${IRIS_WEATHER_PLUGIN:-$ROOT/../iris-weather-plugin}"
+if [ -f "$WEATHER/pyproject.toml" ]; then
+  "$VENV/bin/pip" install -q -e "$WEATHER" || die "weather plugin install failed"
+fi
 
 step "lint: ruff"
 "$VENV/bin/ruff" check . || die "ruff failed"
