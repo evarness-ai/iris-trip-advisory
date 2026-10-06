@@ -20,6 +20,8 @@ capabilities:
 tools:
   trip_advisory:
     effect: read
-    # The forecast's place name and summary are text a third party wrote and they are
-    # echoed in the result, so it is scanned like any external text.
+    # The forecast's place name and summary are third-party text and they are echoed in the
+    # result, so the result is declared `content: external`. IRIS's retrieved-content injection
+    # guard scans it when that guard is enabled and its classifier is available; the guard is
+    # opt-in (IRIS_GOVERNANCE_PROMPT_GUARD), so by default nothing scans the result.
     content: external

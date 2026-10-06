@@ -12,7 +12,6 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-import pytest
 import yaml
 from iris_harness.sdk import PluginAPI
 from iris_harness.testing import assert_conformant, harness, plugin
@@ -181,12 +180,7 @@ def test_an_undeclared_capability_use_is_refused_and_health_gives_the_reason() -
         assert fake.calls == []  # the provider was never reached
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="GAP (core health): a consumer running in degraded mode because an OPTIONAL capability "
-    "has no provider is reported green, so the owner cannot see that the plugin is degraded",
-)
-def test_gap_health_reports_a_missing_optional_capability() -> None:
+def test_health_reports_a_missing_optional_capability() -> None:
     probe = CapabilityProbe("probe", HEALTH_PROBE)
     with harness(plugins=[trip_plugin(), probe.plugin()]) as h:
         line = health_line(health_text(h, probe), "trip-advisory")

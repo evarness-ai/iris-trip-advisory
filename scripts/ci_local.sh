@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Local stand-in for .github/workflows/ci.yml.
-#
-# Hosted CI cannot run for this repository (GitHub billing; we are not using GitHub CI),
-# so this script IS the gate. It runs the same steps as ci.yml, in the same order:
+# Local gate. .github/workflows/ci.yml is the hosted equivalent but is manual-only until
+# iris-harness is installable from an index (iris-harness#108), so this script IS the gate.
+# It runs the same steps as ci.yml, in the same order:
 #
 #   1. install   throwaway venv -> iris-harness WHEEL -> pip install -e ".[test]" ruff black
 #   2. lint      ruff check . ; black --check .
@@ -20,10 +19,10 @@
 #   PYTHON              interpreter for the venv. Default: python3.12.
 #
 # WHERE THIS IS NOT THE HOSTED CI, honestly:
-#   1. ci.yml clones the public iris-harness at IRIS_HARNESS_REF (main) from GitHub; this
+#   1. ci.yml clones iris-harness at IRIS_HARNESS_REF (main) from GitHub; this
 #      script builds from your LOCAL clone's working tree (whatever branch/edits it has) or
 #      from a prebuilt wheel. Check the clone is at the ref you mean to test against.
-#   2. ci.yml ran on ubuntu-latest with a fresh checkout; this runs on your machine, in
+#   2. ci.yml runs on ubuntu-latest with a fresh checkout; this runs on your machine, in
 #      your working tree (untracked files are linted and tested too).
 #   3. ci.yml's pip resolves the latest ruff/black/pip at run time and so does this; there
 #      is no lock file in either, so a tool release can change the result in both.

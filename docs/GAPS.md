@@ -1,12 +1,16 @@
 # SDK gaps found while building this plugin
 
 Each entry says what was tried, what happened, and the core change proposed. None is
-worked around silently; where this repository carries a local bridge it is named. Built
-against the installed `iris-harness` 0.1.0 wheel (built from a clone of `main`) in a fresh
-Python 3.12 venv, next to `iris-plugin-weather-now` (see its own `docs/GAPS.md`; GAP-2 and
+worked around silently; where this repository carries a local bridge it is named. First written
+against an earlier iris-harness build; re-checked on 2026-10-06 against the 0.1.0 wheel built
+from `main` at `2166717`, in a fresh Python 3.12 venv, and each entry says what that changed
+(tracking issues are in evarness-ai/iris-harness). Next to `iris-plugin-weather-now` next to `iris-plugin-weather-now` (see its own `docs/GAPS.md`; GAP-2 and
 GAP-3 there, indexless install and scaffold ergonomics, apply here too and are not repeated).
 
 ## GAP-1 (important): a sync tool has no sanctioned way to call an async-only capability
+
+Still open at `2166717` (iris-harness#107); the bridge's assumption (no running loop inside a
+tool) was re-checked by `tests/graduation` and held.
 
 - Tried: the scaffolded tool is `Callable[[dict], str]` (`PluginAPI.register_tool`), and
   `weather.forecast` is `async def forecast(...)` only (the Protocol), while the docs say a
@@ -22,6 +26,8 @@ GAP-3 there, indexless install and scaffold ergonomics, apply here too and are n
 
 ## GAP-2: `weather.forecast` takes `days` from now, not a date range
 
+Still open at `2166717` (iris-harness#107): `forecast(location, days=3)` is unchanged.
+
 - Tried: the issue asks for "a location + date range". The Protocol is
   `forecast(location, days=3)`: N days ahead of today, no start offset.
 - Result: the consumer converts `end - today` into `days`, caps it (14, a guess; the
@@ -33,6 +39,10 @@ GAP-3 there, indexless install and scaffold ergonomics, apply here too and are n
 
 ## GAP-3: an undeclared capability use degrades the plugin with no reason
 
+Corrected by `docs/GRADUATION.md` (GAP-5 there): System Health does give the reason; only
+`Harness.plugins()` reports `("degraded", None)`, still true at `2166717`. The claim below that
+the cause is only in the log was wrong.
+
 - Tried: `api.capability("weather.forecast")` with `uses` removed from the manifest.
 - Result: the call returns `None` and the plugin shows `('degraded', None)` in health: a
   status with no explanation (`h.plugins()[name]`), unlike `requires`, which says
@@ -42,6 +52,8 @@ GAP-3 there, indexless install and scaffold ergonomics, apply here too and are n
   name in `uses`/`requires` where it can (or at least report it at first mount).
 
 ## GAP-4: no testing helper for the other half of a capability
+
+Still open at `2166717` (iris-harness#107).
 
 - Tried: test collaboration with both plugins mounted without importing the provider.
 - Result: the consumer's test must hand-write a provider plugin (manifest mapping with
@@ -58,6 +70,9 @@ GAP-3 there, indexless install and scaffold ergonomics, apply here too and are n
 
 ## GAP-5: the scaffold has no consumer shape (extends weather GAP-3)
 
+Still open at `2166717` (iris-harness#107); the scaffold's manifest now carries `party: untrusted`,
+but it has no `capabilities:` block, and the generated README still says `iris plugin new`.
+
 - `iris plugins new trip-advisory --kind tool` generates a word-counter tool, a manifest
   with no `party:`/`capabilities:` block, a model script and a test for the counter, and no
   `pytest-asyncio`. Everything consumer-specific (`capabilities.uses`, a degraded path,
@@ -67,6 +82,12 @@ GAP-3 there, indexless install and scaffold ergonomics, apply here too and are n
   `uses`/`requires`, a `None` degraded branch, and a test with a stub provider.
 
 ## GAP-6 (noise, core wheel): harness startup logs a traceback in a core-only install
+
+Mostly fixed on `main` (iris-harness#110 is still open). Re-checked at `2166717`: the
+`googleapiclient` traceback and the `unknown handler` heartbeat warnings no longer appear, and
+no `libc++abi` abort was seen and the gate's pytest step exited 0 (macOS). A new
+warning appears on every chat turn instead: `intercept '<name>' is declared for plugin:<x> but
+no plugin registered it; skipping`. The text below describes the earlier build.
 
 - Every `harness(...)` start logs `skill discovery failed ... ModuleNotFoundError: No module
   named 'googleapiclient'` from the bundled `_data/config/skills/email/gmail-inbox/tools.py`,

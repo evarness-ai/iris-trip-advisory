@@ -274,9 +274,8 @@ def test_the_injected_text_in_a_provider_result_is_not_neutralised_when_the_guar
     strict=True,
     reason="GAP (core): the retrieved-content guard that a `content: external` declaration is "
     "scanned by is OFF unless the operator sets IRIS_GOVERNANCE_PROMPT_GUARD, so by default an "
-    "injected instruction in a third-party result reaches the model unscanned, contradicting "
-    "the weather plugin's manifest comment ('scanned for injected instructions before the model "
-    "reads it')",
+    "injected instruction in a third-party result reaches the model unscanned "
+    "(iris-harness#104)",
 )
 def test_gap_external_content_is_scanned_by_default() -> None:
     fake = FakeWeather(location=INJECTION)

@@ -4,7 +4,8 @@ undocumented behaviour the consumer's sync->async bridge depends on).
 
 Each test either pins what IS the case, or is an ``xfail(strict=True)`` that states what the
 criterion needs and the harness does not do yet: when the harness grows it, the strict xfail
-turns red and the entry in docs/GRADUATION.md must be re-scored.
+turns red and the entry in docs/GRADUATION.md must be re-scored. The G10 audit-row tests were
+xfails against earlier harness builds and pass against current iris-harness main.
 """
 
 from __future__ import annotations
@@ -222,13 +223,7 @@ def test_g10_caller_decision_and_provider_identity_are_visible() -> None:
     assert {"tier_1", "tier_2"} <= tiers  # which tier each model call went to
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="GAP (core audit): the PRE/POST rows of a plain plugin tool call name the tool and the "
-    "caller but not the plugin that owns the tool, so 'which plugin ran' needs a join against the "
-    "registry; only capability rows carry `capability_provider`",
-)
-def test_gap_g10_a_tool_row_names_the_plugin_that_owns_the_tool() -> None:
+def test_g10_a_tool_row_names_the_plugin_that_owns_the_tool() -> None:
     rows = [r for r in _turn_rows() if r["payload"].get("tool_name") == "trip_advisory"]
     assert any(
         r["payload"].get("plugin") == "trip-advisory"
@@ -237,25 +232,14 @@ def test_gap_g10_a_tool_row_names_the_plugin_that_owns_the_tool() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="GAP (core audit): the ReAct step's pre_llm_call rows (tier_2) carry the tier and the "
-    "context size but not the model or provider; only the tier_1 classification call's rows do",
-)
-def test_gap_g10_every_model_call_row_names_the_model() -> None:
+def test_g10_every_model_call_row_names_the_model() -> None:
     calls = [
         r for r in _turn_rows() if r["hook"] == "pre_llm_call" and r["plugin"] == "egress_gate"
     ]
     assert calls and all("model" in r["payload"] for r in calls)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="GAP (testing helper): the stable TurnAuditRow carries neither the caller nor the "
-    "provider/plugin, so a plugin's own test cannot assert 'who called' without decoding the raw "
-    "ledger payload (this suite reads the raw payload via iris_harness.sdk.audit)",
-)
-def test_gap_g10_the_stable_audit_row_type_carries_the_caller() -> None:
+def test_g10_the_stable_audit_row_type_carries_the_caller() -> None:
     from iris_harness.testing import TurnAuditRow
 
     assert "caller" in TurnAuditRow.__dataclass_fields__

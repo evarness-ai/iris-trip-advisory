@@ -1,20 +1,24 @@
 name: ci
 
-# Written, not pushed: this repository is local until the owner publishes it.
-# The weather.forecast provider in the tests is an in-test stand-in; the one integration
-# test against the real iris-plugin-weather-now skips when that is not installed.
+# Manual trigger only, on purpose. This workflow has never run on a hosted runner, and it
+# cannot be a push/pull_request gate yet: iris-harness is not on a package index and has no
+# release wheel (iris-harness#108), so every run has to build a wheel from a clone of
+# iris-harness at run time, and that path is unproven here. A failing automatic run would be
+# noise, not signal. The gate is scripts/ci_local.sh, which runs the same steps locally.
+# Switch the trigger back to push/pull_request once #108 is resolved and a run has passed.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
+
+# The weather.forecast provider in the tests is an in-test stand-in; the one integration
+# test against the real iris-plugin-weather-now skips when that is not installed.
 
 permissions:
   contents: read
 
 env:
   # iris-harness is not on PyPI yet, so the plugin is tested against a wheel built from a
-  # pinned ref of the public repository: the consumer experience, never a source checkout
+  # ref of the iris-harness repository: the consumer experience, never a source checkout
   # on PYTHONPATH. Bump the ref deliberately.
   IRIS_HARNESS_REF: main
 

@@ -212,13 +212,7 @@ def test_the_conformance_suite_agrees_it_is_held_rejected_approved_pinned_and_au
     assert ledger.entries == [ARGS]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="GAP (core wording): a pinned WRITE (not data loss) halts the owner's chat with 'That "
-    "would delete or overwrite your data', which is false for an append; the approval card in "
-    "the queue says 'wants to act on your behalf', which is right",
-)
-def test_gap_the_chat_halt_message_does_not_claim_a_write_deletes_data() -> None:
+def test_the_chat_halt_message_does_not_claim_a_write_deletes_data() -> None:
     ledger = Ledger()
     rules = script(
         answer_rule("appended", "Recorded."), call_tool_rule("Record rent", "ledger_append", ARGS)
