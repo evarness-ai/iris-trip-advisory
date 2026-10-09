@@ -24,6 +24,13 @@ tool) was re-checked by `tests/graduation` and held.
   "tools run off the event loop" and give the SDK a `run_capability(coro)` helper, so every
   consumer does not reinvent the bridge.
 
+## Re-check 2026-10-09 (harness `main` at `cbbfaec`)
+
+GAP-1 of the weather plugin (egress) is closed on the plugin side by iris-weather-plugin PR#1 and
+the core's #170/#171; see `GRADUATION.md` "Re-run 2026-10-09" for the per-test changes. The
+external-content gap (graduation GAP-2, #104) is narrowed there: the default-on floor redacts, the
+classifier guard is still opt-in. The other entries below were not re-checked on this date.
+
 ## GAP-2: `weather.forecast` takes `days` from now, not a date range
 
 Still open at `2166717` (iris-harness#107): `forecast(location, days=3)` is unchanged.

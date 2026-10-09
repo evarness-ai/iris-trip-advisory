@@ -164,6 +164,54 @@ hold; NOT-EVIDENCED = this run cannot show it.
 | G9 | Offline verification | PASS, with a caveat | Both full suites pass under `no_network()` + empty-script fake model with nothing skipped, and every governance check above ran on the scripted model. Caveat: the closure test creates a venv and installs the harness's dependencies, so it needs an index or pip cache; and injection DETECTION cannot be shown offline (GAP-2). |
 | G10 | Explainability: model / tier / caller / governance decision / plugin identity end to end | PASS (was FAIL against the earlier build; GAP-4) | Visible in the ledger, each asserted by a test: tier and classification per model call, the model on every ReAct-step model call, caller (`model:<agent>` or `plugin:<name>`), each hook's decision and reason, the owning plugin on a plain tool's rows, provider on capability rows, and a caller field on the stable audit row type (`test_g10_*`). Not run: the model and plugin identity of calls made by a plugin that itself calls a model (neither plugin does). |
 
+## Re-run 2026-10-09 (after the egress work)
+
+Run locally; no hosted CI. The 2026-10-06 results above are kept as written; this section
+supersedes the G3 verdict and the two affected gaps.
+
+* Harness: `iris-harness` 0.1.0 wheel built from `main` at `cbbfaec` (after #170 manifest
+  `egress`, #171 governed client `api.http`, #172-#175 first-party plugins on it, #137 default-on
+  external-content floor), Python 3.12, macOS.
+* Plugins: `iris-weather-plugin` at `0b96d14` (PR evarness-ai/iris-weather-plugin#1: manifest
+  `egress:` hosts, forecast tool and capability on `api.http`; not yet merged when this ran),
+  `iris-plugin-trip-advisory` from this branch.
+* Result: `scripts/ci_local.sh` (ruff, black, `check_stable_imports`, pytest) passed with
+  `103 passed, 2 xfailed` for the whole repository (`tests/graduation`: `83 passed, 2 xfailed`
+  on the same code). Against unmodified `main` plugins and the old tests the graduation suite
+  ran `5 failed, 77 passed, 3 xfailed`: no strict xfail flipped until the weather plugin
+  declared its egress.
+
+What changed, per test:
+
+| Test | Was | Now | Why (core change) |
+|---|---|---|---|
+| `test_g3_a_plugin_network_call_leaves_a_governed_row_naming_the_destination` | strict xfail (GAP-1, #103) | ordinary test | `pre_egress`/`post_egress` rows name both hosts, `https`, plugin `weather-now`, tool `weather_forecast`, decision `allow`; no row carries the place name (#170, #171; weather PR#1) |
+| `test_g3_..._never_names_the_host` | asserted the ledger did not name the hosts | replaced by `test_g3_the_weather_tool_reaches_only_its_declared_hosts` | the old assertion was the gap itself |
+| `test_both_rows_name_the_tool_and_a_stamped_caller` | every row `allow` | `allow`, or `transform` from `external_content_floor`; the caller is still asserted on each row | the floor adds a "marked untrusted" row to `content: external` results (#137) |
+| `test_the_injected_text_..._is_redacted_by_the_floor_when_the_guard_is_unavailable` | injected text reached the model verbatim | the text is absent, the redaction marker and a floor row are present; the guard's `guard unavailable` warn row is still asserted | default-on floor (#137, #150, #159) |
+| `test_gap_external_content_is_scanned_by_default` (#104) | strict xfail, whole claim | strict xfail, narrowed | still true: the classifier-backed `prompt_guard_retrieved` guard is opt-in (`IRIS_GOVERNANCE_PROMPT_GUARD`) and fails open when its model is absent. Closed by the floor: the injected text no longer reaches the model unredacted by default |
+| `test_network_tool_against_the_real_transport_is_refused_not_crashed` | host names read from `no_network()` attempts | hosts read from `pre_egress` rows; attempts must be non-empty | the governed client resolves the name and connects to the checked address, so `no_network` records IPs (#171) |
+| `test_c_with_both_removed_the_core_still_boots` | tools `["system_health"]` | `["search_docs", "system_health"]` | core registers `search_docs` (#143) |
+| `test_b_reboot_with_a_clean_profile_has_no_trace_of_the_provider` | no health row names "weather" | the only such row is the consumer's own optional-capability degraded row | a plugin missing an optional capability is reported degraded (#120) |
+| `test_a_both_plugins_are_found_only_through_their_entry_points` | failed: no `capability:` row | passes | not a harness change. The closure probe used fixed trip dates (2026-10-06/07); once past, the consumer returns `error: the trip is in the past` before it calls the capability. Dates are now relative to today |
+
+Unchanged: the provider-failure xfail (`test_gap_a_provider_failure_is_not_charged_to_the_consumer_too`,
+the trip-advisory tool catches only `CapabilityUnavailable`) still xfails.
+
+Verdicts after the re-run (only G3 changes; the rest were re-run unchanged and hold):
+
+| G | Verdict | Note |
+|---|---|---|
+| G1 | PASS | unchanged |
+| G2 | PASS | the "no governed egress" caveat is closed |
+| G3 | PASS for egress; PASS for the default scan with one open half | egress is declared, allowed and recorded. The injected-text half: the floor redacts by default (#137), the classifier guard stays opt-in and fail-open (#104, narrowed). This split is a reading; the owner decides whether the open half keeps G3 at FAIL |
+| G4-G6, G8-G10 | PASS | unchanged (G8 now needs the relative-dates fix above) |
+| G7 | NOT-EVIDENCED | untouched; tracked in iris-harness#108 |
+
+Not run here: GitHub CI, a live model, a real Open-Meteo call (note: the real-transport test
+resolves DNS for the two hosts before the socket is refused, so it is not strictly offline at
+the name-resolution step), the classifier weights.
+
 ## What was not run
 
 GitHub CI, a live model, a real Open-Meteo call, the live router,
