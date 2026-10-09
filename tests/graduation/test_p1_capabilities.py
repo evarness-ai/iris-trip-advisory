@@ -251,9 +251,14 @@ def test_content_external_is_declared_by_both_plugins_and_reaches_the_guard_when
         assert scanned[0]["severity"] == "warn"
 
 
-def test_the_injected_text_in_a_provider_result_is_not_neutralised_when_the_guard_is_unavailable() -> (
+def test_the_injected_text_in_a_provider_result_is_redacted_by_the_floor_when_the_guard_is_unavailable() -> (
     None
 ):
+    """Was "not neutralised ... fail-open: it reached the model verbatim". Stale since the
+    external-content floor (iris-harness#137, hardened in #150/#159), default on and independent
+    of IRIS_GOVERNANCE_PROMPT_GUARD: instruction-like text in a `content: external` result is
+    redacted before the model reads it. The opt-in classifier guard itself is still fail-open
+    when its model is unavailable (the first half of this test), which is what #104 is about."""
     fake = FakeWeather(location=INJECTION)
     with harness(
         plugins=[provider_plugin(fake), trip_plugin()],
@@ -267,15 +272,23 @@ def test_the_injected_text_in_a_provider_result_is_not_neutralised_when_the_guar
                 for r in raw_rows(h, tool=tool)
                 if r["plugin"] == "prompt_guard_retrieved"
             ], tool
-        assert INJECTION in h.model_calls()[-1].user  # fail-open: it reached the model verbatim
+        model_text = h.model_calls()[-1].user
+        assert INJECTION not in model_text  # the floor redacted it ...
+        assert "[redacted: instruction-like text in external content]" in model_text
+        floor = [
+            r for r in raw_rows(h, tool="trip_advisory") if r["plugin"] == "external_content_floor"
+        ]
+        assert floor and {r["decision"] for r in floor} <= {"transform"}  # ... and recorded it
 
 
 @pytest.mark.xfail(
     strict=True,
-    reason="GAP (core): the retrieved-content guard that a `content: external` declaration is "
-    "scanned by is OFF unless the operator sets IRIS_GOVERNANCE_PROMPT_GUARD, so by default an "
-    "injected instruction in a third-party result reaches the model unscanned "
-    "(iris-harness#104)",
+    reason="GAP (core), narrowed 2026-10-09: the default-on external-content floor "
+    "(iris-harness#137) now redacts instruction-like text in a `content: external` result before "
+    "the model reads it, which closes the 'reaches the model unscanned' half of iris-harness#104. "
+    "What is still open: the classifier-backed retrieved-content guard (`prompt_guard_retrieved`) "
+    "is OFF unless the operator sets IRIS_GOVERNANCE_PROMPT_GUARD, and fails open when its model "
+    "is unavailable, so by default no classifier scan row exists",
 )
 def test_gap_external_content_is_scanned_by_default() -> None:
     fake = FakeWeather(location=INJECTION)
