@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from contextlib import ExitStack
 from datetime import UTC, date, datetime, timedelta
 from importlib import import_module
 from importlib.metadata import entry_points
@@ -23,7 +24,7 @@ import httpx
 from iris_harness.sdk import PluginAPI
 from iris_harness.sdk.audit import AuditLog
 from iris_harness.sdk.capabilities import Forecast, ForecastPeriod
-from iris_harness.testing import Harness, plugin
+from iris_harness.testing import Harness, fake_http, plugin
 
 GROUP = "iris_harness.plugins"
 WEATHER = "weather-now"
@@ -51,11 +52,24 @@ def trip_plugin(manifest: Any = None):
     return plugin(entry_point(TRIP).load(), manifest=manifest or manifest_of(TRIP))
 
 
+_FAKE_HTTP = ExitStack()  # closed after each test by the autouse fixture in conftest.py
+
+
 def weather_plugin(transport: httpx.MockTransport | None = None):
-    """The real weather-now plugin. With a ``transport`` its HTTP goes there (the plugin's
-    own ``make_setup`` seam); with none it is exactly what the entry point loads."""
-    setup = module_of(WEATHER).make_setup(transport, transport) if transport else None
-    return plugin(setup or entry_point(WEATHER).load(), manifest=manifest_of(WEATHER))
+    """The real weather-now plugin. With a ``transport`` its HTTP is answered from it; with
+    none it is exactly what the entry point loads.
+
+    A plugin that declares ``egress:`` and uses ``api.http`` has no ``make_setup`` seam: only
+    the governed client's transport is replaced (``iris_harness.testing.fake_http``), for the
+    rest of the test, so the declaration, hooks and ledger rows run as in production. An older
+    plugin that still has ``make_setup`` is given the transport directly."""
+    module = module_of(WEATHER)
+    if transport is None:
+        return plugin(entry_point(WEATHER).load(), manifest=manifest_of(WEATHER))
+    if hasattr(module, "make_setup"):
+        return plugin(module.make_setup(transport, transport), manifest=manifest_of(WEATHER))
+    _FAKE_HTTP.enter_context(fake_http(getattr(transport, "handler", transport)))
+    return plugin(entry_point(WEATHER).load(), manifest=manifest_of(WEATHER))
 
 
 # ------------------------------------------------------------- canned Open-Meteo data

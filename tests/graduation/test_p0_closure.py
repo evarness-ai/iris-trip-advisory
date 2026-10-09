@@ -26,6 +26,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -39,7 +40,10 @@ BASE_PYTHON = getattr(sys, "_base_executable", sys.executable)
 PROBE = HERE / "_boot_probe.py"
 BOTH = "weather-now,trip-advisory"
 ASK = "Plan my trip to Lisbon"
-START, END = "2026-10-06", "2026-10-07"
+# Relative to today: the consumer refuses a trip in the past ("error: the trip is in the past")
+# before it asks the weather capability anything, so fixed dates (2026-10-06/07) went stale on the
+# day they passed and the capability row this test looks for was never written.
+START, END = str(date.today() + timedelta(days=1)), str(date.today() + timedelta(days=2))
 WEATHER_DIST, TRIP_DIST = "iris-plugin-weather-now", "iris-plugin-trip-advisory"
 WEATHER_MOD, TRIP_MOD = "iris_plugin_weather_now", "iris_plugin_trip_advisory"
 
@@ -207,7 +211,13 @@ def test_b_reboot_with_a_stale_profile_names_the_missing_plugin_and_keeps_going(
 def test_b_reboot_with_a_clean_profile_has_no_trace_of_the_provider(phases: dict) -> None:
     boot = phases["B"]["boot_clean"]
     assert "weather-now" not in boot["plugins"]
-    assert not [r for r in boot["health_plugin_rows"] if "weather" in r]
+    # The consumer, still installed, reports its optional weather.forecast capability as missing
+    # (degraded) since iris-harness#120; that row names the capability, not the provider.
+    leftover = [r for r in boot["health_plugin_rows"] if "weather" in r]
+    assert all(
+        r.startswith("- plugin:trip-advisory ") and "optional capability weather.forecast" in r
+        for r in leftover
+    ), leftover
     assert not [t for t in boot["tools"] + boot["audited_tools"] if "weather" in t]
     assert not [f for f in boot["home_files"] if "weather" in f.lower()]
     assert boot["providers"] == []
@@ -220,7 +230,8 @@ def test_c_with_both_removed_the_core_still_boots(phases: dict) -> None:
     assert boot["plugins"]["system"] == ["loaded", None]
     for name in ("weather-now", "trip-advisory"):
         assert boot["plugins"][name][0] == "failed", boot["plugins"]
-    assert boot["tools"] == ["system_health"]
+    # The core also registers `search_docs` since iris-harness#143.
+    assert boot["tools"] == ["search_docs", "system_health"]
     assert boot["providers"] == []
     assert boot["answered"], "a turn that asks for a tool that no longer exists still answers"
     removed = phases["B"]["site"] - phases["C"]["site"]

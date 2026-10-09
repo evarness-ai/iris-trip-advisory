@@ -121,10 +121,12 @@ def test_network_tool_against_the_real_transport_is_refused_not_crashed() -> Non
         assert result.answered, result.error
         assert "error" in h.model_calls()[-1].user.lower()
         assert hooks_for(h, "weather_forecast") >= {"pre_tool_use", "post_tool_use"}
-    assert attempts and {host for host, _port in attempts} <= {
-        "geocoding-api.open-meteo.com",
-        "api.open-meteo.com",
-    }
+        # The governed client (iris-harness#171) resolves the host once and connects to the
+        # address it checked, so `no_network` now records resolved IPs, not names. The hosts
+        # it tried are read from its own `pre_egress` rows instead.
+        tried = {r.egress["host"] for r in h.audit_rows(hook_point="pre_egress")}
+    assert attempts, "the plugin should have tried to reach Open-Meteo (and been refused)"
+    assert tried and tried <= {"geocoding-api.open-meteo.com", "api.open-meteo.com"}
 
 
 # -- P0 4: PRE_TOOL_USE and POST_TOOL_USE rows, via the conformance suite --------------------
@@ -179,6 +181,13 @@ def test_both_rows_name_the_tool_and_a_stamped_caller() -> None:
             rows = raw_rows(h, tool=tool)
             assert {"pre_tool_use", "post_tool_use"} <= {r["hook"] for r in rows}, tool
             assert callers_for(h, tool) == {caller}, tool
-            assert all(r["decision"] == "allow" for r in rows), tool
+            # The external-content floor (iris-harness#137, default on) adds a `transform`
+            # row ("marked untrusted") to a tool whose result is `content: external`; every
+            # other row is still an `allow`, and every row still carries the stamped caller.
+            assert all(
+                r["decision"] == "allow"
+                or (r["decision"] == "transform" and r["plugin"] == "external_content_floor")
+                for r in rows
+            ), tool
         pre = [r for r in raw_rows(h, tool=cap) if r["hook"] == "pre_tool_use"]
         assert {r["payload"]["capability_provider"] for r in pre} == {"fake-weather"}

@@ -14,7 +14,6 @@ import asyncio
 from importlib.metadata import distribution
 from pathlib import Path
 
-import pytest
 from iris_harness.sdk import PluginAPI
 from iris_harness.testing import harness, plugin
 
@@ -93,7 +92,7 @@ def test_tools_run_with_no_running_event_loop_which_the_consumer_bridge_relies_o
 
 
 # -- G3: a plugin's own outbound HTTP is not governed ----------------------------------------------------
-def test_g3_the_weather_tool_reaches_open_meteo_and_the_ledger_never_names_the_host() -> None:
+def test_g3_the_weather_tool_reaches_only_its_declared_hosts() -> None:
     meteo = OpenMeteo()
     rules = script(
         answer_rule("Forecast for", "Done."),
@@ -107,26 +106,14 @@ def test_g3_the_weather_tool_reaches_open_meteo_and_the_ledger_never_names_the_h
             "geocoding-api.open-meteo.com",
             "api.open-meteo.com",
         }
-        egress = [
-            r for r in raw_rows(h, tool="weather_forecast") if r["plugin"] == "network_egress"
-        ]
-        assert [r["reason"] for r in egress] == ["network_egress: not a network tool"]
-        from iris_harness.sdk.audit import AuditLog
-
-        ledger = "\n".join(
-            row.payload_json + row.reason
-            for row in AuditLog(db_path=h.audit_db).query(since=h._started)
-        )
-        assert "open-meteo" not in ledger
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="GAP (core, weather GAP-1): nothing mediates or records a plugin's own outbound HTTP; "
-    "the manifest has no egress declaration and the network_egress hook only inspects the tool "
-    "names in its default list",
-)
-def test_gap_g3_a_plugin_network_call_leaves_a_governed_row_naming_the_destination() -> None:
+def test_g3_a_plugin_network_call_leaves_a_governed_row_naming_the_destination() -> None:
+    """Was a strict xfail (GAP-1, iris-harness#103): nothing mediated a plugin's own HTTP.
+    Closed by the manifest ``egress:`` field and the governed client ``api.http``
+    (iris-harness#170, #171) with iris-weather-plugin declaring its hosts and using it:
+    each request is a ``pre_egress``/``post_egress`` pair naming host, port and scheme, and
+    never the path, the query or the place."""
     meteo = OpenMeteo()
     rules = script(
         answer_rule("Forecast for", "Done."),
@@ -136,13 +123,16 @@ def test_gap_g3_a_plugin_network_call_leaves_a_governed_row_naming_the_destinati
     )
     with harness(plugins=[weather_plugin(meteo.transport())], fake_model=rules) as h:
         h.chat("What is the weather forecast for Lisbon")
-        from iris_harness.sdk.audit import AuditLog
-
-        ledger = "\n".join(
-            row.payload_json + row.reason
-            for row in AuditLog(db_path=h.audit_db).query(since=h._started)
-        )
-        assert "api.open-meteo.com" in ledger
+        hosts = {"geocoding-api.open-meteo.com", "api.open-meteo.com"}
+        for hook in ("pre_egress", "post_egress"):
+            rows = h.audit_rows(hook_point=hook)
+            assert {r.egress["host"] for r in rows} == hosts, hook
+            assert {r.tool_plugin for r in rows} == {"weather-now"}, hook
+            assert {r.tool for r in rows} == {"weather_forecast"}, hook
+        assert {r.decision for r in h.audit_rows(hook_point="pre_egress")} == {"allow"}
+        assert {r.egress["scheme"] for r in h.audit_rows(hook_point="pre_egress")} == {"https"}
+        leaked = [r for r in h.audit_rows(hook_point="pre_egress") if "Lisbon" in repr(r.egress)]
+        assert not leaked, "the place name must not appear in an egress row"
 
 
 # -- G4: what isolation there is, and the in-process limit ---------------------------------------------------
