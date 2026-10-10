@@ -116,17 +116,22 @@ def test_network_tool_against_the_real_transport_is_refused_not_crashed() -> Non
         answer_rule("error", "The weather service is unreachable."),
         call_tool_rule(ASK, "weather_forecast", {"location": "Lisbon"}),
     )
-    with harness(plugins=[weather_plugin()], fake_model=rules) as h, no_network() as attempts:
+    with harness(plugins=[weather_plugin()], fake_model=rules) as h, no_network():
         result = h.chat(ASK)
         assert result.answered, result.error
         assert "error" in h.model_calls()[-1].user.lower()
         assert hooks_for(h, "weather_forecast") >= {"pre_tool_use", "post_tool_use"}
-        # The governed client (iris-harness#171) resolves the host once and connects to the
-        # address it checked, so `no_network` now records resolved IPs, not names. The hosts
-        # it tried are read from its own `pre_egress` rows instead.
+        # The governed client (iris-harness#171) resolves the host before it connects, and
+        # `no_network()` refuses the connect but not the name lookup. Whether the socket is
+        # ever reached therefore depends on the machine's resolver (with DNS down the outcome
+        # is `EgressDenied`, no address, and `attempts` stays empty: the 3.13 job of
+        # iris-harness run 38021010687 failed this way upstream). So this test does not read
+        # `attempts`; it reads the governed client's own `pre_egress` rows, which are written
+        # before the lookup and name the hosts it tried either way.
         tried = {r.egress["host"] for r in h.audit_rows(hook_point="pre_egress")}
-    assert attempts, "the plugin should have tried to reach Open-Meteo (and been refused)"
+        outcomes = h.audit_rows(hook_point="post_egress")
     assert tried and tried <= {"geocoding-api.open-meteo.com", "api.open-meteo.com"}
+    assert outcomes and all(r.egress.get("error") for r in outcomes)  # refused, whatever the cause
 
 
 # -- P0 4: PRE_TOOL_USE and POST_TOOL_USE rows, via the conformance suite --------------------
